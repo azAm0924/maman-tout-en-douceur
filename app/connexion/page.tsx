@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, LockKeyhole } from 'lucide-react';
@@ -12,6 +12,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+
+  // Si la session est déjà active, /connexion devient une porte d'entrée
+  // vers le tableau de bord, au lieu de redemander le mot de passe.
+  useEffect(() => {
+    const db = getBrowserClient();
+    if (!db) return;
+    let active = true;
+    void (async () => {
+      const { data: { session } } = await db.auth.getSession();
+      if (!active || !session) return;
+      const { data: isAdmin, error: accessError } = await db.rpc('is_admin');
+      if (active && !accessError && isAdmin) router.replace('/admin');
+    })().catch(() => { /* Afficher le formulaire en cas de réseau indisponible. */ });
+    return () => { active = false; };
+  }, [router]);
+
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
@@ -22,7 +38,10 @@ export default function LoginPage() {
       const { error: loginError } = await db.auth.signInWithPassword({ email, password });
       if (loginError) throw new Error('Identifiants incorrects ou compte non autorisé.');
       const { data: isAdmin, error: permissionError } = await db.rpc('is_admin');
-      if (permissionError || !isAdmin) {
+      if (permissionError) {
+        throw new Error('Impossible de vérifier vos droits pour le moment. Réessayez.');
+      }
+      if (!isAdmin) {
         await db.auth.signOut();
         throw new Error('Ce compte ne dispose pas d’un accès administrateur.');
       }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, FilePlus2, LogOut, Pencil, Trash2, Save, RotateCcw } from 'lucide-react';
 import { categories, getBrowserClient, type Entry, type EntryKind, slugify } from '@/lib/data';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -41,18 +42,24 @@ export default function AdminPage() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [fileKey, setFileKey] = useState(0);
+  const [checkAttempt, setCheckAttempt] = useState(0);
 
   useEffect(() => {
     let current = true;
     const db = getBrowserClient();
     if (!db) { setError('Supabase non configuré : voir le fichier README.md.'); setLoading(false); return; }
     void (async () => {
-      const { data: { user }, error: userError } = await db.auth.getUser();
+      // getSession lit la session persistante Supabase même après navigation/rechargement.
+      // Les droits d'écriture restent sécurisés côté Supabase par les policies RLS.
+      const { data: { session }, error: sessionError } = await db.auth.getSession();
       if (!current) return;
-      if (userError || !user) { router.replace('/connexion'); return; }
+      if (sessionError) throw new Error('Impossible de vérifier la session. Réessayez.');
+      if (!session) { router.replace('/connexion'); return; }
       const { data: admin, error: authError } = await db.rpc('is_admin');
       if (!current) return;
-      if (authError || !admin) { await db.auth.signOut(); router.replace('/connexion'); return; }
+      // IMPORTANT : une erreur réseau/RPC ne doit jamais entraîner un signOut().
+      if (authError) throw new Error('Vérification des droits indisponible. Réessayez sans vous déconnecter.');
+      if (!admin) { setError('Ce compte ne possède pas les droits administrateur.'); setLoading(false); return; }
       setAuthorized(true);
       const { data, error: listError } = await db.from('entries').select('*').order('created_at', { ascending: false }).limit(300);
       if (!current) return;
@@ -61,7 +68,7 @@ export default function AdminPage() {
       setLoading(false);
     })().catch(err => { if (current) { setError(err instanceof Error ? err.message : 'Erreur de connexion'); setLoading(false); } });
     return () => { current = false; };
-  }, [router]);
+  }, [router, checkAttempt]);
 
   async function refresh(db: SupabaseClient) {
     const { data, error: loadError } = await db.from('entries').select('*').order('created_at', { ascending: false }).limit(300);
@@ -153,9 +160,9 @@ export default function AdminPage() {
   }
   async function signOut() { await getBrowserClient()?.auth.signOut(); router.replace('/connexion'); router.refresh(); }
   if (loading) return <div className="auth-shell"><div className="auth-card"><p>Vérification de votre accès…</p></div></div>;
-  if (!authorized) return <div className="auth-shell"><div className="auth-card"><h1>Accès privé</h1><p>{error || 'Redirection vers la connexion…'}</p><a href="/connexion" className="btn btn-outline">Se connecter</a></div></div>;
+  if (!authorized) return <div className="auth-shell"><div className="auth-card"><h1>Accès privé</h1><p>{error || 'Redirection vers la connexion…'}</p><div className="admin-actions"><button type="button" className="btn btn-primary" onClick={() => { setLoading(true); setError(''); setCheckAttempt(n => n + 1); }}>Réessayer</button><Link href="/connexion" className="btn btn-outline">Page de connexion</Link></div></div></div>;
   return <section className="admin-main"><div className="container">
-    <div className="admin-header"><div><p className="eyebrow">ESPACE ADMINISTRATION</p><h1>Mon petit <em>atelier</em></h1><p className="admin-note">Publier, modifier ou supprimer vos conseils et documents.</p></div><div className="admin-actions"><a href="/" className="btn btn-outline"><ArrowLeft size={15}/> Voir le site</a><button className="btn btn-outline" onClick={signOut} type="button"><LogOut size={15}/> Déconnexion</button></div></div>
+    <div className="admin-header"><div><p className="eyebrow">ESPACE ADMINISTRATION</p><h1>Mon petit <em>atelier</em></h1><p className="admin-note">Publier, modifier ou supprimer vos conseils et documents. Retrouvez cet espace à tout moment via « Mon espace » en haut du site.</p></div><div className="admin-actions"><Link href="/" className="btn btn-outline"><ArrowLeft size={15}/> Voir le site</Link><button className="btn btn-outline" onClick={signOut} type="button"><LogOut size={15}/> Déconnexion</button></div></div>
     {error && <div role="alert" className="error-box">{error}</div>}{message && <div role="status" className="success-box">{message}</div>}
     <div className="admin-columns"><aside className="admin-panel"><h2>Mes publications ({rows.length})</h2><p className="admin-note">Cliquez sur Modifier pour retrouver un contenu.</p><button type="button" className="btn btn-outline" onClick={resetForm} style={{ marginBottom: 20 }}><FilePlus2 size={16}/> Nouvelle publication</button>
     <div className="admin-list">{rows.length ? rows.map(row => <div className="admin-entry" key={row.id}><div><strong>{row.title}</strong><small>{row.kind === 'article' ? 'Article' : 'Ressource'} · {row.published ? 'En ligne' : 'Brouillon'}</small></div><div style={{ display: 'flex', gap: 5, flexShrink: 0 }}><button type="button" className="tiny-button" onClick={() => edit(row)} disabled={busy} title="Modifier"><Pencil size={14}/></button><button type="button" className="tiny-button danger" onClick={() => deleteEntry(row)} disabled={busy} title="Supprimer"><Trash2 size={14}/></button></div></div>) : <p className="admin-note">Aucune publication pour le moment.</p>}</div></aside>
