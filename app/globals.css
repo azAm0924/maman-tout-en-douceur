@@ -4505,10 +4505,6 @@ html {
     font-size: 11px
   }
 
-  .shop-collection-arrow {
-    right: -23px
-  }
-
   .shop-product-grid {
     grid-template-columns: 1fr;
     max-width: 460px;
