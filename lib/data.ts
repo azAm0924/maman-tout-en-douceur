@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export type EntryKind = 'article' | 'ressource';
-export const categories = ['Grossesse', 'Naissance', 'Post-partum', 'Nouveau-né', 'Allaitement', 'Éveil & activités', 'Bien-être'] as const;
+export const categories = ['Grossesse', 'Naissance', 'Post-partum', 'Nouveau-né', 'Allaitement', 'Éveil & activités', 'Bien-être', 'Autonomie & routines', 'Apprentissages', 'Émotions', 'Organisation'] as const;
 export type Entry = {
   id: string;
   kind: EntryKind;
@@ -16,6 +16,16 @@ export type Entry = {
   published: boolean;
   created_at: string;
   updated_at: string;
+  support_type?: 'livret' | 'fiche' | 'kit' | 'guide';
+  audience?: string | null;
+  page_count?: number | null;
+  is_featured?: boolean;
+  pdf_for_sale?: boolean;
+  pdf_price_cents?: number | null;
+  print_for_sale?: boolean;
+  print_price_cents?: number | null;
+  paid_pdf_path?: string | null;
+  paid_pdf_name?: string | null;
 };
 
 let browserClient: SupabaseClient | null = null;
@@ -62,10 +72,26 @@ export function publicFileUrl(path: string | null): string | null {
   return `${url}/storage/v1/object/public/publications/${safePath}`;
 }
 
+export function supportTypeLabel(type?: string | null) {
+  return ({ livret: 'Livret', fiche: 'Fiche pratique', kit: 'Kit & activité', guide: 'Guide' } as Record<string, string>)[type || 'fiche'] || 'Support pédagogique';
+}
+
+export async function getResource(slug: string): Promise<Entry | null> {
+  const client = getServerClient();
+  if (!client) return null;
+  const { data, error } = await client.from('entries').select('*').eq('published', true).eq('kind', 'ressource').eq('slug', slug).maybeSingle();
+  if (error) { console.error('Erreur lors du chargement du support:', error.message); return null; }
+  return (data as Entry | null) ?? null;
+}
+
 export function prettyDate(value: string) {
   return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value));
 }
 
 export function slugify(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90);
+}
+
+export function euro(cents: number) {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(cents / 100);
 }

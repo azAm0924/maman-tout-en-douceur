@@ -1,3 +1,39 @@
+# Maman tout en douceur — v0.4, vitrine de livrets & supports pédagogiques
+
+Cette version transforme l’ancien site éditorial en **catalogue de créations**, sans perdre les comptes, les articles, les PDFs ni les publications Supabase déjà existantes.
+
+## Mise à jour à partir de v0.3
+
+1. **Sauvegarder / committer** l’état actuel de votre projet. Ne pas supprimer `.env.local`.
+2. Décompresser **`maman-tout-en-douceur-catalogue-patch-v0.4.zip`** à la racine du projet (par exemple `C:\localWeb\mted`) en **fusionnant les dossiers** et en remplaçant les fichiers présents. Ne pas exécuter le SQL `setup.sql` une seconde fois par besoin de migration : ce n'est pas nécessaire.
+3. Dans Supabase > SQL Editor, exécuter **`sql/migration-v0.4.sql`**, non destructif. Les nouvelles colonnes sont indispensables pour enregistrer depuis le nouveau formulaire admin.
+4. Démarrer `npm run dev`, visiter `/`, `/ressources`, puis `/connexion` et `/admin`.
+5. Dans l'admin, créer une publication de type **Livret / Support pédagogique**, ajouter un titre, une description, choisir le type, un public/âge conseillé, une couverture et éventuellement un PDF. Cocher **Publier immédiatement**. Le support apparaît alors dans `/ressources` et sur sa fiche `/ressources/son-slug`.
+6. Tester les liens et le rendu mobile, puis exécuter `npm run typecheck` et `npm run build` sur votre machine avant `git add . && git commit && git push`.
+
+## Ce qui change
+
+- Nouvelle landing page orientée catalogue, visuels de livrets illustratifs en CSS.
+- Catalogue filtrable par type, thématique et recherche textuelle, sans nouveau paquet JS.
+- Fiches détaillées par support (présentation, public visé, nombre de pages, document en accès public si ajouté).
+- Espace admin conservé et enrichi : type de support, public, pages, mise à la une.
+- Les anciens articles restent accessibles dans « Conseils ».
+- Anciennes ressources répertoriées comme « Fiche pratique » par défaut ; elles peuvent être reclassées depuis l'admin.
+- Fichiers et session Supabase inchangés. La migration n'efface aucun enregistrement.
+
+## Fonctionnalités NON incluses dans cette version
+
+- Aucun paiement, panier, code promo, commande ou expédition n'est implémenté.
+- Aucun PDF payant n'est protégé. Le bucket `publications` est **public** : un PDF joint à une publication est téléchargeable par tout le monde, même si l'on cache son lien.
+- Pour vendre : intégrer un paiement Stripe/Shopify et un parcours de commande, et **stocker les fichiers payants dans un bucket privé** avec des URL temporaires contrôlées côté serveur après vérification du paiement. Ne jamais protéger un PDF payant avec un simple bouton masqué.
+- Les fausses couvertures décoratives sur la landing sont des **illustrations**, pas des produits existants. Les cartes du catalogue viennent uniquement des données Supabase.
+
+## Vérifications
+
+La syntaxe TS/TSX et la feuille CSS ont été parsées localement. L'accès au registre npm et le navigateur de test étaient indisponibles pendant cette génération ; le build complet, les parcours Supabase et les captures mobiles doivent être validés sur l'environnement local avant mise en production.
+
+---
+
 # Maman tout en douceur
 
 Site éditorial francophone pour la maternité / petite enfance : Next.js + TypeScript, Supabase Auth + Postgres + Storage, déployable via GitHub sur Vercel.
@@ -116,3 +152,35 @@ Les couvertures remplacées pendant l'édition ne sont pas automatiquement purg�
 ## État de validation
 
 Le code a été écrit pour Next.js 16 et Supabase JS v2. Le réseau npm n'était pas disponible dans l'environnement de génération ; `npm install`, `npm run typecheck`, `npm run build` et le test réel de connexion/upload **n'ont donc pas pu être exécutés ici**. Effectuer ces vérifications après `npm install` avant mise en production.
+
+## Landing v0.2 : animations légères
+
+L'accueil comprend désormais : une grande accroche illustrée, une bande de valeurs,
+des rubriques animées, une phrase signature, les derniers articles, un encart PDF et
+un appel à découvrir Instagram. Aucun changement n'a été apporté à la base SQL,
+à l'authentification ni à la gestion des fichiers.
+
+Les mouvements sont réalisés en CSS ; un petit `ScrollReveal` (IntersectionObserver)
+déclenche les apparitions au défilement. Si JavaScript n'est pas disponible,
+le contenu reste visible. Le réglage système « réduire les animations » est respecté.
+Aucune bibliothèque d'animation ni aucun service de polices distant n'a été ajouté.
+
+Sur une version précédente du projet, tu peux soit remplacer tout le dossier en
+conservant ton `.env.local`, soit ne copier que :
+
+- `app/page.tsx`
+- `app/globals.css`
+- `app/layout.tsx`
+- `components/scroll-reveal.tsx` (nouveau)
+
+Le logo SVG `/public/ornament.svg` reste volontairement provisoire.
+
+---
+
+## v0.5 — Vente numérique et livret imprimé
+
+Le catalogue v0.4 comprend maintenant des variantes de vente (`PDF`, `imprimé`) et un panier mixte. Le paiement est réalisé dans Stripe Checkout. Les PDF **payants** sont déposés dans le bucket privé `paid-downloads`; les anciens documents déposés dans `publications` restent publics.
+
+Consultez **`INSTALLATION-v0.5.txt`** pour l'installation, les variables d'environnement, la migration Supabase, les tests Stripe et surtout les prérequis obligatoires à une vente en ligne. Exécuter `sql/migration-v0.5.sql` *après* `sql/migration-v0.4.sql`. Définir `COMMERCE_ENABLED=false` tant que les vérifications ne sont pas terminées. Le schéma de commande est `orders` + `order_items`; le webhook Stripe confirme le paiement; l'administratrice peut traiter les commandes dans `/admin/commandes`.
+
+**Statut** : prototype technique pour essais en mode Stripe Test ; pas une boutique de production prête à encaisser. La mise en conformité commerciale, les confirmations e-mail et les tests intégrés restent à effectuer.

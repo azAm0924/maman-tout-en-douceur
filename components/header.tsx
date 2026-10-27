@@ -3,14 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Instagram, LockKeyhole, Menu, UserRound, X } from 'lucide-react';
+import { Instagram, LockKeyhole, Menu, UserRound, X, ShoppingBag } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { getBrowserClient } from '@/lib/data';
+import { readCart } from '@/lib/cart';
 
 const pages = [
   { label: 'Accueil', href: '/' },
-  { label: 'Les articles', href: '/articles' },
-  { label: 'Ressources', href: '/ressources' },
+  { label: 'Les créations', href: '/ressources' },
+  { label: 'Conseils', href: '/articles' },
   { label: 'À propos', href: '/a-propos' },
 ];
 
@@ -18,6 +19,8 @@ export function Header() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [cartCount,setCartCount]=useState(0);
+  useEffect(()=>{const update=()=>setCartCount(readCart().reduce((n,item)=>n+item.quantity,0));update();window.addEventListener('mted-cart-update',update);window.addEventListener('storage',update);return()=>{window.removeEventListener('mted-cart-update',update);window.removeEventListener('storage',update);};},[]);
 
   useEffect(() => {
     const db = getBrowserClient();
@@ -66,7 +69,7 @@ export function Header() {
       </Link>
       <a className="instagram-link" href="https://www.instagram.com/mamantoutendouceur/" target="_blank" rel="noopener noreferrer" aria-label="Instagram Maman tout en douceur"><Instagram size={18}/></a>
     </nav>
-    <div className="header-tools">
+    <div className="header-tools"><Link href="/panier" className="commerce-header-cart" aria-label={`Panier, ${cartCount} article(s)`} onClick={()=>setOpen(false)}><ShoppingBag size={19}/>{cartCount>0&&<span>{cartCount}</span>}</Link>
       <Link href={accountHref} className={`header-account-link ${isAdmin ? 'header-account-admin' : ''}`} aria-label={accountLabel} title={accountLabel} onClick={() => setOpen(false)}>
         {isAdmin ? <UserRound size={17} aria-hidden="true" /> : <LockKeyhole size={16} aria-hidden="true" />}
         <span>{accountLabel}</span>

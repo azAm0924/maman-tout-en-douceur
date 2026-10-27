@@ -6,9 +6,9 @@ import { ScrollReveal } from '@/components/scroll-reveal';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com'),
-  title: { default: 'Maman tout en douceur | Conseils autour de la maternité', template: '%s | Maman tout en douceur' },
-  description: 'Un cocon de conseils et de ressources pour vivre la grossesse, la naissance et les premiers instants avec bébé, tout en douceur.',
-  openGraph: { title: 'Maman tout en douceur', description: 'Un cocon de douceur pour les futurs et jeunes parents.', type: 'website', locale: 'fr_FR' },
+  title: { default: 'Maman tout en douceur | Livrets & supports pédagogiques', template: '%s | Maman tout en douceur' },
+  description: 'Livrets, fiches et supports pédagogiques pour accompagner les parents et les tout-petits avec douceur.',
+  openGraph: { title: 'Maman tout en douceur', description: 'Des livrets et supports pédagogiques pensés avec le cœur pour les parents et les tout-petits.', type: 'website', locale: 'fr_FR' },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

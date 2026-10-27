@@ -1,0 +1,63 @@
+MAMAN TOUT EN DOUCEUR — v0.5, prototype boutique hybride PDF + imprimés
+
+IMPORTANT : PROTOTYPE DE PAIEMENT À TESTER, PAS DE PRODUCTION AVANT CHECKLIST.
+
+INSTALLATION DEPUIS V0.4
+1. Sauvegarder le code actuel et la base Supabase (dump si possible).
+2. Décompresser le ZIP patch en préservant les sous-dossiers. Ne pas remplacer .env.local.
+3. Supabase > SQL Editor > exécuter sql/migration-v0.5.sql (après v0.4).
+4. npm install (ajoute Stripe Node SDK), puis npm run dev.
+5. Supabase > Settings > API Keys : récupérer la clé SECRET service_role.
+   Attention : SEULEMENT dans .env.local et Vercel Environment Variables, jamais dans GitHub
+   et JAMAIS avec le préfixe NEXT_PUBLIC_.
+6. Stripe Dashboard (MODE TEST) : copier sk_test_... dans STRIPE_SECRET_KEY.
+7. Webhook Stripe sur /api/stripe/webhook : checkout.session.completed,
+   checkout.session.async_payment_succeeded, checkout.session.async_payment_failed,
+   checkout.session.expired, charge.refunded. Copier whsec_... dans STRIPE_WEBHOOK_SECRET.
+8. Ajouter SHIPPING_FEE_CENTS=490 (exemple seulement ; à remplacer par un tarif vérifié).
+9. Après test local et après vérifications contractuelles, mettre COMMERCE_ENABLED=true.
+10. Redémarrer npm run dev après modification de .env.local.
+
+ENV local/Vercel :
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+NEXT_PUBLIC_SITE_URL=http://localhost:3000 (puis URL Vercel)
+SUPABASE_SERVICE_ROLE_KEY=...
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+SHIPPING_FEE_CENTS=490
+COMMERCE_ENABLED=false  <-- laisser désactivé tant que le test et les CGV ne sont pas prêts
+
+Pour tester les webhooks en local avec Stripe CLI :
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+La commande fournit une valeur whsec_... temporaire à utiliser dans .env.local.
+Effectuer un vrai paiement test via Checkout (carte test Stripe 4242 4242 4242 4242).
+Ne pas confondre le secret webhook CLI et celui du Dashboard Vercel.
+
+PARCOURS ACHETEUR
+- Fiche livret : choisir PDF / imprimé / les deux suivant disponibilité.
+- Panier local ; paiement Stripe Checkout ; adresse collectée seulement pour le physique.
+- Stripe webhook met commande à « paid », jamais la page merci.
+- Page merci fournit le fichier à l'acheteur via une URL signée courte (60 sec) générée côté serveur.
+- Admin /admin/commandes : liste, adresse, état de préparation et lien de suivi.
+
+LIMITES DU MVP ET BLOQUANTS POUR UNE MISE EN VENTE RÉELLE
+- Modifier /cgv avec coordonnées réelles, SIREN, conditions livraison, politique retours,
+  rétractation, médiation, TVA, informations sur le contenu numérique et garanties.
+- Fournir confirmation contractuelle des consentements et du droit de rétractation (e-mail).
+- Mettre en place un vrai e-mail transactionnel pour délivrer/récupérer le lien secret.
+  Actuellement le lien de téléchargement est sur la page retour Stripe seulement.
+- Pas de calcul de stocks/réservation : modèle recommandé = impression à la commande.
+- Frais d'envoi forfaitaires FR UNIQUEMENT ; vérifier tarif et délais réels.
+- Pas de tax engine, factures PDF, remboursements automatisés ni tableaux comptables.
+- Personnaliser le retour/annulation et prévoir support client (SAV).
+- Vérifier en test : commande PDF, physique et mixte, erreurs, webhook répété,
+  remboursement, expiration, délais livraison, mobile, accessibilité.
+- Remplacer la clé sk_test par sk_live UNIQUEMENT après mise en conformité et tests.
+- Garder la clé serveur de Supabase hors du navigateur et hors Git.
+- Le bucket 'publications' EXISTANT RESTE PUBLIC. Ne JAMAIS y déposer de PDF PAYANTS.
+  Pour transformer un ancien PDF gratuit en produit payant, déposer une copie dans
+  paid-downloads (champ privé admin) puis supprimer l'ancien objet PUBLIC dans Storage.
+- Les anciens PDF privés achetés sont conservés même si un article du catalogue est supprimé.
+
+NOTE : npm install/build et paiement réel n'ont pas été validés dans cet environnement.
