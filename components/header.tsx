@@ -19,6 +19,7 @@ export function Header() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasAccount,setHasAccount]=useState(false);
   const [cartCount,setCartCount]=useState(0);
   useEffect(()=>{const update=()=>setCartCount(readCart().reduce((n,item)=>n+item.quantity,0));update();window.addEventListener('mted-cart-update',update);window.addEventListener('storage',update);return()=>{window.removeEventListener('mted-cart-update',update);window.removeEventListener('storage',update);};},[]);
 
@@ -33,6 +34,7 @@ export function Header() {
     // Ne jamais déconnecter l'utilisateur parce qu'une vérification a échoué.
     async function checkAccess(session: Session | null) {
       const thisRequest = ++requestId;
+      if (active) setHasAccount(Boolean(session));
       if (!session) {
         if (active) setIsAdmin(false);
         return;
@@ -55,8 +57,8 @@ export function Header() {
     return () => { active = false; ++requestId; subscription.unsubscribe(); };
   }, []);
 
-  const accountHref = isAdmin ? '/admin' : '/connexion';
-  const accountLabel = isAdmin ? 'Mon espace' : 'Connexion';
+  const accountHref = isAdmin ? '/admin' : hasAccount ? '/compte' : '/connexion';
+  const accountLabel = isAdmin ? 'Administration' : hasAccount ? 'Mon compte' : 'Connexion';
 
   return <header className="site-header"><div className="container header-row">
     <Link className="brand" href="/" onClick={() => setOpen(false)} aria-label="Maman tout en douceur, accueil">

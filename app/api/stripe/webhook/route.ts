@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { commerceDb, stripeServer } from '@/lib/commerce-server';
+import {sendOrderConfirmation} from '@/lib/confirmation-email';
 
 export const runtime = 'nodejs';
 
@@ -29,8 +30,11 @@ export async function POST(request: Request) {
         const shipping = (session as unknown as {collected_information?:{shipping_details?:unknown};shipping_details?:unknown}).collected_information?.shipping_details ?? (session as unknown as {shipping_details?:unknown}).shipping_details ?? null;
         const { error } = await db.from('orders').update({status:'paid',paid_at:new Date().toISOString(),email:details?.email ?? null,customer_name:details?.name ?? null,shipping_address:shipping ?? details?.address ?? null, stripe_payment_intent_id: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null,total_cents:session.amount_total}).eq('id',orderId).in('status',['pending','failed','expired']);
         if (error) throw error;
+        await sendOrderConfirmation(orderId);
       } else {
         const status = event.type === 'checkout.session.expired' ? 'expired' : 'failed';
+        const {error:releaseError}=await db.rpc('release_order_stock',{p_order_id:orderId});
+        if(releaseError) throw releaseError;
         const {error}=await db.from('orders').update({status}).eq('id',orderId).eq('status','pending');
         if(error)throw error;
       }

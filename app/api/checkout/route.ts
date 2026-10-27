@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { commerceDb, getShippingCents, newOrderToken, stripeServer, tokenHash } from '@/lib/commerce-server';
+import { requestUser, stripeCustomerFor } from '@/lib/customer-server';
 
 export const runtime = 'nodejs';
 
@@ -13,7 +14,12 @@ export async function POST(req: Request) {
     if (!configuredOrigin) throw new Error('NEXT_PUBLIC_SITE_URL absent');
     const origin = new URL(configuredOrigin).origin;
     if (req.headers.get('origin') !== origin || new URL(req.url).origin !== origin) return NextResponse.json({ error: 'Origine non autorisée.' }, { status: 403 });
+    if (process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_') && (!process.env.RESEND_API_KEY || !process.env.ORDER_EMAIL_FROM || !process.env.SUPPORT_EMAIL)) return NextResponse.json({error:'Les confirmations e-mail doivent être configurées avant le paiement réel.'},{status:503});
     if (process.env.COMMERCE_ENABLED !== 'true') return NextResponse.json({error:'La boutique est en préparation.'},{status:503});
+    const user = await requestUser(req);
+    if (!user || !user.email_confirmed_at) return NextResponse.json({error:'Connectez-vous avec une adresse e-mail confirmée avant de commander.'},{status:401});
+    const {data:profile}=await commerceDb().from('customer_profiles').select('is_blocked').eq('user_id',user.id).maybeSingle();
+    if(profile?.is_blocked)return NextResponse.json({error:'Votre compte est temporairement suspendu. Contactez le service client.'},{status:403});
     const payload = await req.json();
     const items = payload?.items as CartLine[];
     if (!Array.isArray(items) || !items.length || items.length > 20 || items.some(i => !i || !isUUID(i.entryId) || !['pdf','print'].includes(i.variant) || !Number.isInteger(i.quantity) || i.quantity < 1 || i.quantity > 10)) {
@@ -24,15 +30,16 @@ export async function POST(req: Request) {
     if (unique.size !== items.length) return NextResponse.json({ error: 'Articles en double.' }, { status: 400 });
     const db = commerceDb();
     const ids = [...new Set(items.map(i => i.entryId))];
-    const { data: entries, error: entriesError } = await db.from('entries').select('id,title,kind,published,pdf_for_sale,pdf_price_cents,print_for_sale,print_price_cents,paid_pdf_path').in('id',ids);
+    const { data: entries, error: entriesError } = await db.from('entries').select('id,title,kind,published,is_hidden,print_stock,pdf_for_sale,pdf_price_cents,print_for_sale,print_price_cents,paid_pdf_path').in('id',ids);
     if (entriesError || !entries || entries.length !== ids.length) return NextResponse.json({ error: 'Un support est introuvable.' }, { status: 400 });
     const prices = [] as { entry_id: string; title: string; variant: 'pdf'|'print'; quantity: number; unit_price_cents: number; paid_pdf_path: string | null }[];
     for (const item of items) {
       const entry = entries.find(e => e.id === item.entryId);
-      if (!entry || !entry.published || entry.kind !== 'ressource') return NextResponse.json({ error: 'Un article est indisponible.' }, { status: 400 });
+      if (!entry || !entry.published || entry.is_hidden || entry.kind !== 'ressource') return NextResponse.json({ error: 'Un article est indisponible.' }, { status: 400 });
       const price = item.variant === 'pdf' ? entry.pdf_price_cents : entry.print_price_cents;
       const enabled = item.variant === 'pdf' ? entry.pdf_for_sale : entry.print_for_sale;
       if (!enabled || typeof price !== 'number' || !Number.isSafeInteger(price) || price < 50 || (item.variant === 'pdf' && !entry.paid_pdf_path)) return NextResponse.json({ error: 'Un format est indisponible.' }, { status: 400 });
+      if(item.variant === 'print' && entry.print_stock !== null && entry.print_stock < item.quantity) return NextResponse.json({error:'Stock insuffisant pour ce livret.'},{status:409});
       prices.push({ entry_id: entry.id, title: entry.title, variant: item.variant, quantity: item.quantity, unit_price_cents: price, paid_pdf_path: item.variant === 'pdf' ? entry.paid_pdf_path : null });
     }
     const digital = prices.some(i=>i.variant === 'pdf');
@@ -42,13 +49,16 @@ export async function POST(req: Request) {
     if (subtotal > 10000000) return NextResponse.json({ error: 'Montant trop élevé.' }, { status: 400 });
     const token = newOrderToken();
     const shipping = hasPhysical ? getShippingCents() : 0;
-    const { data: order, error: orderError } = await db.from('orders').insert({ subtotal_cents:subtotal, shipping_cents: shipping, has_physical: hasPhysical, digital_consent: digital && payload.digitalConsent, consented_at: digital ? new Date().toISOString() : null, access_token_hash: tokenHash(token) }).select('id').single();
+    const { data: order, error: orderError } = await db.from('orders').insert({ subtotal_cents:subtotal, shipping_cents: shipping, has_physical: hasPhysical, digital_consent: digital && payload.digitalConsent, consented_at: digital ? new Date().toISOString() : null, access_token_hash: tokenHash(token), user_id:user.id, email:user.email }).select('id').single();
     if (orderError || !order) throw new Error('Création de la commande impossible');
     let createdSessionId: string | null = null;
     try {
       const { error: itemsError } = await db.from('order_items').insert(prices.map(i=>({ order_id:order.id, ...i })));
       if (itemsError) throw itemsError;
+      const {error:stockError}=await db.rpc('reserve_order_stock',{p_order_id:order.id});
+      if(stockError) throw new Error('Stock indisponible : '+stockError.message);
       const stripe = stripeServer();
+      const customerId = await stripeCustomerFor(user);
       const session = await stripe.checkout.sessions.create({
         mode:'payment', locale:'fr', client_reference_id:order.id,
         metadata:{ order_id:order.id },
@@ -58,7 +68,8 @@ export async function POST(req: Request) {
           shipping_options:[{ shipping_rate_data:{ type:'fixed_amount' as const, fixed_amount:{amount:shipping,currency:'eur'},display_name:'Livraison en France', } }],
           phone_number_collection:{enabled:true},
         } : {}),
-        customer_creation:'always',
+        customer:customerId,
+        saved_payment_method_options:{payment_method_save:'enabled',allow_redisplay_filters:['always','limited','unspecified']},
         success_url:`${origin}/commande/merci?commande=${order.id}&cle=${token}`,
         cancel_url:`${origin}/panier?annule=1`,
       },{ idempotencyKey:`checkout-${order.id}` });
@@ -70,8 +81,10 @@ export async function POST(req: Request) {
     } catch(err) {
       // Commande en attente jamais réglée, nettoyée si aucune session exploitable n'est retournée.
       console.error('checkout failure',err);
-      if (createdSessionId) { try { await stripeServer().checkout.sessions.expire(createdSessionId); } catch(expireError){ console.error('Session Stripe à expirer manuellement',createdSessionId,expireError); } }
-      else await db.from('orders').delete().eq('id',order.id).eq('status','pending');
+      let safeToRelease=!createdSessionId;
+      if (createdSessionId) { try { await stripeServer().checkout.sessions.expire(createdSessionId); safeToRelease=true; } catch(expireError){ console.error('Session Stripe à expirer manuellement ; stock conservé',createdSessionId,expireError); } }
+      if(safeToRelease) await db.rpc('release_order_stock',{p_order_id:order.id});
+      if(!createdSessionId) await db.from('orders').delete().eq('id',order.id).eq('status','pending');
       throw err;
     }
   } catch(err) {

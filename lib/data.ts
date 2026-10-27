@@ -20,6 +20,8 @@ export type Entry = {
   audience?: string | null;
   page_count?: number | null;
   is_featured?: boolean;
+  is_hidden?: boolean;
+  print_stock?: number | null;
   pdf_for_sale?: boolean;
   pdf_price_cents?: number | null;
   print_for_sale?: boolean;

@@ -1,69 +1,29 @@
 'use client';
-
-import { useEffect, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import {useEffect,useState,type FormEvent} from 'react';
+import {useRouter} from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, LockKeyhole } from 'lucide-react';
-import { getBrowserClient } from '@/lib/data';
-
-export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-
-  // Si la session est déjà active, /connexion devient une porte d'entrée
-  // vers le tableau de bord, au lieu de redemander le mot de passe.
-  useEffect(() => {
-    const db = getBrowserClient();
-    if (!db) return;
-    let active = true;
-    void (async () => {
-      const { data: { session } } = await db.auth.getSession();
-      if (!active || !session) return;
-      const { data: isAdmin, error: accessError } = await db.rpc('is_admin');
-      if (active && !accessError && isAdmin) router.replace('/admin');
-    })().catch(() => { /* Afficher le formulaire en cas de réseau indisponible. */ });
-    return () => { active = false; };
-  }, [router]);
-
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError('');
-    const db = getBrowserClient();
-    if (!db) { setError('Supabase n’est pas encore configuré. Consultez le README.'); return; }
-    setPending(true);
-    try {
-      const { error: loginError } = await db.auth.signInWithPassword({ email, password });
-      if (loginError) throw new Error('Identifiants incorrects ou compte non autorisé.');
-      const { data: isAdmin, error: permissionError } = await db.rpc('is_admin');
-      if (permissionError) {
-        throw new Error('Impossible de vérifier vos droits pour le moment. Réessayez.');
-      }
-      if (!isAdmin) {
-        await db.auth.signOut();
-        throw new Error('Ce compte ne dispose pas d’un accès administrateur.');
-      }
-      router.replace('/admin');
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
-    } finally {
-      setPending(false);
-    }
+import {getBrowserClient} from '@/lib/data';
+export default function AccountAuth(){
+ const router=useRouter(); const [mode,setMode]=useState<'login'|'register'|'reset'>('login');
+ const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [error,setError]=useState('');
+ useEffect(()=>{const db=getBrowserClient(); if(!db)return;void db.auth.getUser().then(async ({data:{user}})=>{if(!user)return;const {data}=await db.rpc('is_admin');router.replace(data?'/admin':'/compte');});},[router]);
+ async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');setMessage('');const db=getBrowserClient();if(!db){setError('Configuration Supabase manquante');setBusy(false);return;}
+ try{
+  if(mode==='register'){
+   const {error:e}=await db.auth.signUp({email,password,options:{emailRedirectTo:`${window.location.origin}/compte`}});
+   if(e)throw e; setMessage('Compte demandé. Vérifiez votre boîte e-mail pour confirmer votre inscription, puis connectez-vous.');setMode('login');setPassword('');
+  }else if(mode==='reset'){
+   const {error:e}=await db.auth.resetPasswordForEmail(email,{redirectTo:`${window.location.origin}/reinitialiser`});if(e)throw e;
+   setMessage('Si cette adresse possède un compte, un e-mail de réinitialisation a été envoyé.');
+  }else{
+   const {error:e}=await db.auth.signInWithPassword({email,password});if(e)throw e;
+   const {data:admin}=await db.rpc('is_admin');router.replace(admin?'/admin':'/compte');router.refresh();
   }
-  return <div className="auth-shell"><div className="auth-card">
-    <LockKeyhole size={25} color="#b58a7f" strokeWidth={1.4}/>
-    <p className="eyebrow" style={{ marginTop: 20 }}>ESPACE RÉSERVÉ</p>
-    <h1>Connexion <em>privée</em></h1>
-    <p>Connectez-vous pour gérer les articles et les documents du site.</p>
-    <form onSubmit={submit}>
-      <div className="form-field"><label htmlFor="email">Adresse e-mail</label><input id="email" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required placeholder="adresse@email.fr"/></div>
-      <div className="form-field"><label htmlFor="password">Mot de passe</label><input id="password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required/></div>
-      {error && <div className="error-box" role="alert">{error}</div>}
-      <button className="btn btn-primary" type="submit" disabled={pending} style={{ width: '100%', marginTop: 17 }}>{pending ? 'Connexion…' : 'Se connecter'} <ArrowRight size={17}/></button>
-    </form>
-    <p style={{ textAlign: 'center', marginTop: 28 }}><Link href="/">← Retour au site</Link></p>
-  </div></div>;
+ }catch(e){setError(e instanceof Error?e.message:'Impossible de terminer cette opération.');}finally{setBusy(false);}}
+ return <main className="auth-shell"><section className="auth-card"><p className="eyebrow">MAMAN TOUT EN DOUCEUR</p><h1>{mode==='login'?'Bienvenue !':mode==='register'?'Créer mon compte':'Mot de passe oublié'}</h1><p>{mode==='register'?'Retrouvez vos commandes, vos favoris et vos achats PDF.':mode==='reset'?'Nous vous enverrons un lien sécurisé.':'Connectez-vous à votre espace personnel.'}</p>
+ <form onSubmit={submit}><div className="form-field"><label htmlFor="email">E-mail</label><input id="email" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)}/></div>
+ {mode!=='reset'&&<div className="form-field"><label htmlFor="password">Mot de passe</label><input id="password" type="password" autoComplete={mode==='register'?'new-password':'current-password'} minLength={8} required value={password} onChange={e=>setPassword(e.target.value)}/></div>}
+ {error&&<p role="alert" className="error-box">{error}</p>}{message&&<p role="status" className="success-box">{message}</p>}
+ <button type="submit" className="btn btn-primary" disabled={busy}>{busy?'Traitement…':mode==='register'?'Créer mon compte':mode==='reset'?'Envoyer le lien':'Se connecter'}</button></form>
+ <div className="account-auth-links"><button type="button" onClick={()=>{setMode(mode==='register'?'login':'register');setError('');}}>{mode==='register'?'Déjà un compte ? Connexion':'Créer un compte client'}</button><button type="button" onClick={()=>{setMode(mode==='reset'?'login':'reset');setError('');}}>{mode==='reset'?'Retour à la connexion':'Mot de passe oublié ?'}</button></div><p><Link href="/">← Retour au site</Link></p></section></main>;
 }

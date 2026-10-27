@@ -828,3 +828,19 @@ html { scroll-padding-top: 94px; }
 @media(prefers-reduced-motion:reduce){.commerce-header-cart{transition:none}}
 .shop-legal{max-width:930px;min-height:75vh;padding-top:70px;padding-bottom:90px}.shop-legal h1{font:normal clamp(30px,5vw,49px) Georgia,serif;color:#6e524b}.shop-legal p,.shop-legal li{line-height:1.8}.shop-legal li{margin-bottom:10px}.shop-legal .error-box{padding:18px;margin:25px 0}.shop-checkbox a{text-decoration:underline;color:#915c51}
 @media(max-width:365px){.header-row{gap:4px}.brand{font-size:13px;gap:5px}.menu-button{min-width:35px;min-height:38px}.header-account-link{width:34px;height:36px;min-height:36px;flex-basis:34px}.commerce-header-cart{width:27px;height:34px}.header-tools{gap:2px}}
+
+/* v0.6 — Espace clients, avis et modération */
+.customer-space{padding-block:clamp(54px,8vw,105px);max-width:1050px}
+.customer-space h1{margin:13px 0 26px}.customer-space h1 em{color:#a57870}
+.customer-top,.customer-card,.review-heading{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.customer-panel{background:#fffbf7;border:1px solid #e9d8cf;border-radius:23px;margin:22px 0;padding:clamp(20px,4vw,34px)}
+.customer-panel h2{font-family:Georgia,serif;margin:0 0 19px;color:#68514d}.customer-panel h3{margin:20px 0 8px}
+.customer-order{border-top:1px solid #eadbd4;padding:21px 0}.customer-order p{margin:9px 0}.customer-order li{margin-bottom:10px}
+.customer-order .btn{padding:7px 12px;font-size:12px;margin-left:9px}
+.customer-card,.review-item{border-top:1px solid #eadbd4;padding:15px 0}.customer-card small{display:block}
+.account-auth-links{display:flex;flex-wrap:wrap;gap:15px;justify-content:center;margin:22px 0}
+.account-auth-links button{border:0;background:transparent;text-decoration:underline;cursor:pointer;color:#94695d}
+.review-item>strong{color:#bb8673}.review-item blockquote{margin:14px 0;background:#f7eee9;padding:15px 20px;border-left:3px solid #b98b80}
+.review-item blockquote p{margin:7px 0 0}.review-form{max-width:660px}.review-admin-buttons{display:flex;flex-wrap:wrap;gap:10px}
+.product-feedback{margin-block:55px}.product-feedback textarea{min-height:110px}
+@media(max-width:640px){.customer-space{padding:38px 16px}.customer-panel{padding:19px}.customer-card{align-items:flex-start}.review-heading{align-items:flex-start}.customer-order .btn{margin-top:6px}}
