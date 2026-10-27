@@ -13,8 +13,7 @@ export async function POST(req:Request){
  const user=await requestUser(req); if(!user)return NextResponse.json({error:'Connexion requise'},{status:401});
  const customer=await stripeCustomerFor(user);
  const origin=new URL(process.env.NEXT_PUBLIC_SITE_URL!).origin;
- const session=await stripeServer().checkout.sessions.create({mode:'setup',locale:'fr',customer,
-  payment_method_types:['card'],success_url:`${origin}/compte?carte=ajoutee`,cancel_url:`${origin}/compte?carte=annulee`,
+ const session=await stripeServer().checkout.sessions.create({mode:'setup',locale:'fr',customer,success_url:`${origin}/compte?carte=ajoutee`,cancel_url:`${origin}/compte?carte=annulee`,
   metadata:{user_id:user.id}});
  return NextResponse.json({url:session.url});
 }
